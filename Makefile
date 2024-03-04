@@ -18,6 +18,6 @@ build: cmake
 clean:
 	rm -rf $(BUILD_DIR)
 
-flash: 
+flash: build 
 	st-flash --reset write ${BUILD_DIR}/$(notdir $(CURDIR)).bin 0x08000000
 

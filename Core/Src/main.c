@@ -1,25 +1,24 @@
 /* USER CODE BEGIN Header */
 /**
- ******************************************************************************
- * @file           : main.c
- * @brief          : Main program body
- ******************************************************************************
- * @attention
- *
- * Copyright (c) 2024 STMicroelectronics.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
- ******************************************************************************
- */
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2024 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -49,6 +48,35 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for taskProducer1 */
+osThreadId_t taskProducer1Handle;
+const osThreadAttr_t taskProducer1_attributes = {
+  .name = "taskProducer1",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for taskConsumer1 */
+osThreadId_t taskConsumer1Handle;
+const osThreadAttr_t taskConsumer1_attributes = {
+  .name = "taskConsumer1",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
+/* Definitions for myQueue01 */
+osMessageQueueId_t myQueue01Handle;
+const osMessageQueueAttr_t myQueue01_attributes = {
+  .name = "myQueue01"
+};
+/* Definitions for timerProducer1 */
+osTimerId_t timerProducer1Handle;
+const osTimerAttr_t timerProducer1_attributes = {
+  .name = "timerProducer1"
+};
+/* Definitions for timerLEDDisabler1 */
+osTimerId_t timerLEDDisabler1Handle;
+const osTimerAttr_t timerLEDDisabler1_attributes = {
+  .name = "timerLEDDisabler1"
+};
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -57,6 +85,10 @@ const osThreadAttr_t defaultTask_attributes = {
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 void StartDefaultTask(void *argument);
+void StartTaskProducer1(void *argument);
+void StartTaskConsumer1(void *argument);
+void CallbackTimerProducer1(void *argument);
+void CallbackTimerLEDDisabler1(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -110,9 +142,22 @@ int main(void)
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
+  /* Create the timer(s) */
+  /* creation of timerProducer1 */
+  timerProducer1Handle = osTimerNew(CallbackTimerProducer1, osTimerPeriodic, NULL, &timerProducer1_attributes);
+
+  /* creation of timerLEDDisabler1 */
+  timerLEDDisabler1Handle = osTimerNew(CallbackTimerLEDDisabler1, osTimerOnce, NULL, &timerLEDDisabler1_attributes);
+
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
+    xTimerChangePeriod(timerProducer1Handle, pdMS_TO_TICKS(300), 10);
+    xTimerChangePeriod(timerLEDDisabler1Handle, pdMS_TO_TICKS(500), 10);
   /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* creation of myQueue01 */
+  myQueue01Handle = osMessageQueueNew (16, sizeof(uint16_t), &myQueue01_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -121,6 +166,12 @@ int main(void)
   /* Create the thread(s) */
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* creation of taskProducer1 */
+  taskProducer1Handle = osThreadNew(StartTaskProducer1, NULL, &taskProducer1_attributes);
+
+  /* creation of taskConsumer1 */
+  taskConsumer1Handle = osThreadNew(StartTaskConsumer1, NULL, &taskConsumer1_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -136,12 +187,12 @@ int main(void)
   /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-    while (1)
-    {
+  while (1)
+  {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    }
+  }
   /* USER CODE END 3 */
 }
 
@@ -197,12 +248,24 @@ void SystemClock_Config(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -221,8 +284,6 @@ static void MX_GPIO_Init(void)
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
-  /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
   for(;;)
@@ -230,6 +291,72 @@ void StartDefaultTask(void *argument)
     osDelay(1);
   }
   /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartTaskProducer1 */
+/**
+* @brief Function implementing the taskProducer1 thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTaskProducer1 */
+void StartTaskProducer1(void *argument)
+{
+  /* USER CODE BEGIN StartTaskProducer1 */
+    uint16_t i = 1;
+    // xTimerChangePeriod(timerProducer1Handle, pdMS_TO_TICKS(300), 10);
+    // xTimerChangePeriod(timerLEDDisabler1Handle, pdMS_TO_TICKS(500), 10);
+  /* Infinite loop */
+  for(;;)
+  {
+    xQueueSend(myQueue01Handle, &i, 10);
+    osDelay(pdMS_TO_TICKS(100));
+  }
+  /* USER CODE END StartTaskProducer1 */
+}
+
+/* USER CODE BEGIN Header_StartTaskConsumer1 */
+/**
+* @brief Function implementing the taskConsumer1 thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTaskConsumer1 */
+void StartTaskConsumer1(void *argument)
+{
+  /* USER CODE BEGIN StartTaskConsumer1 */
+    uint16_t sum = 0;
+    uint16_t recieved = 0;
+  /* Infinite loop */
+  for(;;)
+  {
+      xQueueReceive(myQueue01Handle, &recieved, portMAX_DELAY);
+      sum += recieved;
+    if (sum >= 30)
+    {
+        sum = 0;
+        HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+        xTimerStart(timerLEDDisabler1Handle, pdMS_TO_TICKS(500));
+    }
+  }
+  /* USER CODE END StartTaskConsumer1 */
+}
+
+/* CallbackTimerProducer1 function */
+void CallbackTimerProducer1(void *argument)
+{
+  /* USER CODE BEGIN CallbackTimerProducer1 */
+    uint16_t i = 2;
+    xQueueSend(myQueue01Handle, &i, 10);
+  /* USER CODE END CallbackTimerProducer1 */
+}
+
+/* CallbackTimerLEDDisabler1 function */
+void CallbackTimerLEDDisabler1(void *argument)
+{
+  /* USER CODE BEGIN CallbackTimerLEDDisabler1 */
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+  /* USER CODE END CallbackTimerLEDDisabler1 */
 }
 
 /**
@@ -260,11 +387,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-    /* User can add his own implementation to report the HAL error return state */
-    __disable_irq();
-    while (1)
-    {
-    }
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -279,7 +406,6 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

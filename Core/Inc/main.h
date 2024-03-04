@@ -31,10 +31,9 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "cmsis_os.h"
-#include "usb_device.h"
-// #include "usbd_cdc_if.h"
-// #include "usbd_cdc.h"
+#include "FreeRTOS.h"
+#include "timers.h"
+#include "queue.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -44,8 +43,7 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-extern volatile uint32_t ulIdleCycleCount;
-extern volatile uint32_t buf[4];
+
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -61,6 +59,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LED_Pin GPIO_PIN_13
+#define LED_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 
